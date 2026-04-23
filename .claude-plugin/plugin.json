@@ -1,0 +1,14 @@
+{
+  "name": "testnexus-remote-install",
+  "version": "1.0.0",
+  "description": "Push, list, and download Android APK builds from Claude Code. Builds are delivered to all team members via push notification with SHA-256 integrity verification.",
+  "author": "TestNexus by Twocan Software",
+  "homepage": "https://github.com/programmerKaustubh/test-nexus-mcp",
+  "license": "Apache-2.0",
+  "userConfig": {
+    "api_key": {
+      "description": "Your TestNexus API key (starts with ri_ — shown once when you create a project in the app)",
+      "sensitive": true
+    }
+  }
+}
