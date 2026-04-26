@@ -2,9 +2,11 @@
 
 Ask Claude:
 
-> "Build the app and push it to my phone."
+> "Build the app and push it to testnexus."
 
 Thirty seconds later, your phone buzzes with the new APK. No USB cables, no manual file transfers, no emailing builds to the team.
+
+(`testnexus` is the MCP name you'll register in the install step below — when you have multiple MCPs configured, naming the one you want avoids ambiguity.)
 
 This is a [Model Context Protocol](https://modelcontextprotocol.io/) server that plugs into Claude Code and lets Claude push your Android builds to every team member's phone over the air.
 
@@ -23,11 +25,75 @@ This is a [Model Context Protocol](https://modelcontextprotocol.io/) server that
 
 ## What Claude can do
 
-| Tool | What it does |
-|------|--------------|
-| `push_build` | Validates the APK, computes SHA-256, extracts git metadata, and uploads it. Every team member gets a push notification. |
-| `list_builds` | Shows recent builds — version, branch, timestamp, size. Filter by branch or limit results. |
-| `download_build` | Downloads a specific APK from the cloud to your local machine. SHA-256 is verified after download. |
+This MCP exposes three tools. Each accepts the parameters listed in its **Customize** column — Claude will infer them from your prompt, but you can also pass values explicitly (e.g. *"push_build with version 2.1.0 and notes 'fixes crash on boot'"*) to override the defaults.
+
+> **Tip — name the MCP in your prompt when you have more than one configured.** Claude routes a request to whichever MCP best matches the wording. If you also have other MCPs installed (filesystem, GitHub, etc.), saying *"push the build to **testnexus**"* (or whatever name you used in `claude mcp add <name> ...`) removes the ambiguity. With only this MCP installed it's not strictly required — Claude has nowhere else to send a `push_build`.
+
+### `push_build` — upload an APK
+
+Validates the APK, computes SHA-256, extracts git metadata (branch, commit hash, commit message), and uploads it to your TestNexus project. Every team member subscribed to the project gets a push notification on their phone within seconds.
+
+**Default behavior:** if you don't pass any parameters, the tool finds the most recently built APK in `app/build/outputs/apk/` (resolved relative to `TESTNEXUS_PROJECT_ROOT`), reads the version from the APK manifest, and uploads it with no extra notes.
+
+**Customize:**
+
+| Parameter | Type | Default | What it controls |
+|---|---|---|---|
+| `apk_path` | string | auto-detects from Gradle output | Absolute or relative path to a specific `.apk` file. Use this when you have multiple build flavors and want to push one explicitly (e.g. `app/build/outputs/apk/internalQa/release/app-internalQa-release.apk`). |
+| `version_name` | string | extracted from APK manifest | Override the version label shown to recipients (e.g. `1.4.2-hotfix`). Only use this when the manifest version doesn't match what you want testers to see — usually let it auto-extract. |
+| `notes` | string | empty | Free-form text shown alongside the build in the app — typical use is a changelog summary or a "what to test" list. Markdown-aware on the receiving side. |
+
+**Example prompts:**
+
+> *"Build a debug APK and push it via testnexus"* — Claude runs `./gradlew assembleDebug`, picks up the resulting APK, calls `push_build` with no overrides.
+>
+> *"Use testnexus to push the QA build at app/build/outputs/apk/qa/release/app-qa-release.apk with notes 'phase-2 onboarding flow ready for testing'"* — explicit `apk_path` + `notes`.
+
+---
+
+### `list_builds` — see recent builds
+
+Shows the most recent builds your project has received from any source (CI, this MCP, or the TestNexus app's CI/CD snippet). For each build: ID, version name, version code, git branch + commit, upload timestamp, file size in MB.
+
+**Default behavior:** returns the 10 most recent builds across all branches.
+
+**Customize:**
+
+| Parameter | Type | Default | What it controls |
+|---|---|---|---|
+| `limit` | number | `10` (max `50`) | How many builds to return. Lower = faster + less context noise. Raise it when you're hunting for an older build. |
+| `branch` | string | all branches | Restrict to a single git branch — handy when your project has parallel `develop` / `main` / `release/x.y` build streams and you only want one. |
+
+**Example prompts:**
+
+> *"List the last 5 testnexus builds on the develop branch"* → `limit=5`, `branch="develop"`.
+>
+> *"What recent builds are on testnexus?"* → defaults (10, all branches).
+
+This tool is **read-only** — safe to call any time without affecting your team's devices.
+
+---
+
+### `download_build` — pull an APK back to your laptop
+
+Downloads a specific APK (by build ID) from the cloud to your local filesystem. SHA-256 is verified after download — if the bytes don't match what was uploaded, the tool tells you and removes the partial file.
+
+**Default behavior:** saves the file as `./<build_id>.apk` in your current working directory.
+
+**Customize:**
+
+| Parameter | Type | Default | What it controls |
+|---|---|---|---|
+| `build_id` | string (**required**) | — | The build to fetch. Get this from a prior `list_builds` call. |
+| `output_path` | string | `./<build_id>.apk` | Where to save the file. Use this to give the file a meaningful name or write to a specific directory (e.g. `~/Downloads/ourapp-2.1.0-qa.apk`). |
+
+**Example prompts:**
+
+> *"Download the latest testnexus develop build and save it to ~/Desktop/test.apk"* — Claude calls `list_builds limit=1 branch=develop`, then `download_build` with the resulting `build_id` and `output_path=~/Desktop/test.apk`.
+>
+> *"Get testnexus build abc123 and put it in ./qa-builds/"* — explicit `build_id` and `output_path`.
+
+---
 
 ### What gets validated before upload
 
@@ -185,27 +251,29 @@ Regardless of which option you used, confirm the connector loaded before you try
 
 ## Using it
 
-Once installed, talk to Claude naturally. Some examples:
+Once installed, talk to Claude naturally. Mention the MCP by name (`testnexus` if you used the recommended `claude mcp add testnexus ...`, or whatever name you registered) so Claude routes the action correctly when you have multiple MCPs configured. Some examples:
 
 ```
-Build the app and push it to my phone.
+Build the app and push it to testnexus.
 
-Run assembleDebug and send it to Test Nexus.
+Run assembleDebug and send the APK to testnexus.
 
-Push app/build/outputs/apk/release/app-release.apk with notes: fixed the login crash.
+Use testnexus to push app/build/outputs/apk/release/app-release.apk with notes: fixed the login crash.
 
-Show me the last five builds on the main branch.
+Show me the last five testnexus builds on the main branch.
 
-Download build abc12345 from the cloud.
+Download testnexus build abc12345 to my Downloads folder.
 ```
 
 The most powerful pattern combines Claude's coding ability with a push:
 
 ```
-Fix the null pointer crash in LoginViewModel, build the app, and push it to my phone.
+Fix the null pointer crash in LoginViewModel, build the app, and push it to testnexus.
 ```
 
 Claude reads the code, fixes the bug, runs the build, calls `push_build`, and your phone buzzes — all in one instruction.
+
+> **Naming reminder:** if you registered the MCP with a different name (e.g. `claude mcp add ourapp ...`), use that name in the prompt instead of `testnexus`. The MCP doesn't care what it's called — Claude does, because that's the routing key.
 
 ### APK auto-detection
 
