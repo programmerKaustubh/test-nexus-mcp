@@ -1,6 +1,6 @@
 {
-  "name": "@testnexus/mcp-server",
-  "version": "1.0.1",
+  "name": "@twocan/testnexus-mcp",
+  "version": "1.1.0",
   "description": "TestNexus MCP server for Claude Code — push, list, and download Android APK builds",
   "main": "src/index.js",
   "bin": {
@@ -15,13 +15,29 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/programmerKaustubh/test-nexus-mcp.git"
+    "url": "git+https://github.com/programmerKaustubh/test-nexus-mcp.git"
   },
   "homepage": "https://github.com/programmerKaustubh/test-nexus-mcp",
   "bugs": "https://github.com/programmerKaustubh/test-nexus-mcp/issues",
-  "keywords": ["mcp", "claude-code", "android", "apk", "testnexus", "build-delivery", "ci-cd"],
+  "keywords": [
+    "mcp",
+    "claude-code",
+    "android",
+    "apk",
+    "testnexus",
+    "build-delivery"
+  ],
   "license": "Apache-2.0",
+  "files": [
+    "src",
+    ".claude-plugin",
+    "hooks"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
+    "@modelcontextprotocol/sdk": "1.30.0"
   }
 }

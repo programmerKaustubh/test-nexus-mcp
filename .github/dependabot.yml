@@ -1,0 +1,24 @@
+# Dependabot — the counterweight to the EXACT dependency pin in package.json.
+#
+# We pin `@modelcontextprotocol/sdk` to an exact version (not `^1.0.0`) so a
+# compromised upstream release cannot enter a build automatically — every
+# dependency change must be a deliberate, reviewed commit. The cost of that is
+# we'd otherwise sit on a vulnerable version forever, so Dependabot opens a PR
+# when a new version lands: the upgrade stays deliberate, but it stays visible.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+
+  # Keep the release workflow's own actions current — a stale/compromised
+  # third-party action in the publish job would be a supply-chain hole in the
+  # very pipeline that exists to prevent one.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

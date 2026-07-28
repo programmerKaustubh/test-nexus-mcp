@@ -2,6 +2,21 @@
 
 All notable changes to the TestNexus MCP Server will be documented in this file.
 
+## [1.1.0] — 2026-07-28
+
+### Security
+
+- **[HIGH, CWE-770] Streaming download-size cap in `download_build`.** The 100 MB limit is now enforced *while* the response streams — the write aborts the moment the byte count crosses the cap. Previously only the pre-upload path was size-checked; a malicious or misconfigured backend could otherwise stream an unbounded body into a local file and exhaust memory/disk.
+- **[MEDIUM, CWE-20] Tool-argument validation on every call.** `validateToolArgs` type-checks each argument (strings must be strings; numbers must be finite) and enforces required fields (e.g. `download_build.build_id`) before any work runs. Invalid calls fail fast with a sanitized message instead of reaching the handler.
+- **[LOW, CWE-209] Success-path output sanitization.** `download_build` now runs the returned `output_path` through `sanitizeErrorMessage` on the success path too, not just in error branches — the operator's local filesystem username never reaches the model on a normal download.
+- **Dependency bump — `@modelcontextprotocol/sdk` `^1.0.0` → `1.30.0` (pinned).** Clears all outstanding advisories; `npm audit` reports **0 vulnerabilities**.
+
+### Changed
+
+- **Published as `@twocan/testnexus-mcp`** with an explicit `files` allowlist (`src`, `.claude-plugin`, `hooks`) and **npm build provenance** — the tarball is signed and linked to the exact public commit it was built from.
+- **APK size limit standardized at 100 MB** to match the server-side cap (was 150 MB).
+- Outbound **`X-CLI-Version: mcp-1.1.0`** header added; MCP server version bumped to `1.1.0`.
+
 ## [1.0.1] — 2026-04-23
 
 ### Security

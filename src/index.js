@@ -64,8 +64,8 @@ function sanitizeErrorMessage(msg) {
   // Layered redaction: PROJECT_ROOT catches the canonical form; homedir() catches
   // paths outside PROJECT_ROOT but inside the user home (fs errors on arbitrary
   // files the operator accidentally pointed at); the three regex layers catch
-  // cases where the fs error string uses slightly different casing or separator
-  // than what resolve() / homedir() return.
+  // cases where the `fs` error string uses a slightly different casing or
+  // separator than what `resolve()` / `homedir()` return.
   let s = String(msg);
   s = s.split(resolve(PROJECT_ROOT)).join(".");
   s = s.split(homedir()).join("~");
@@ -76,7 +76,7 @@ function sanitizeErrorMessage(msg) {
 }
 
 // Production backend. Branded Firebase Hosting domain — rewrites map
-// `/<functionName>` to the corresponding Cloud Function. Public, non-secret:
+// /<functionName> to the corresponding Cloud Function. Public, non-secret:
 // this is the same URL advertised on the website and in the privacy policy.
 const BASE_URL = "https://api.twocan.us";
 
@@ -276,7 +276,7 @@ async function uploadToWebhook(apkPath, metadata) {
     headers: {
       "X-API-Key": API_KEY,
       "Content-Type": "application/json",
-      "X-CLI-Version": "mcp-1.0.0",
+      "X-CLI-Version": "mcp-1.1.0",
     },
     body: JSON.stringify({
       sha256: metadata.sha256,
@@ -323,7 +323,7 @@ async function uploadToWebhook(apkPath, metadata) {
     headers: {
       "X-API-Key": API_KEY,
       "Content-Type": "application/json",
-      "X-CLI-Version": "mcp-1.0.0",
+      "X-CLI-Version": "mcp-1.1.0",
     },
     body: JSON.stringify({ buildId }),
     signal: AbortSignal.timeout(120000),
@@ -353,7 +353,7 @@ async function fetchBuilds({ limit = 10, branch = "" } = {}) {
     method: "GET",
     headers: {
       "X-API-Key": API_KEY,
-      "X-CLI-Version": "mcp-1.0.0",
+      "X-CLI-Version": "mcp-1.1.0",
     },
     signal: AbortSignal.timeout(30000),
     redirect: "error", // CWE-522: never forward X-API-Key on cross-origin 3xx
@@ -380,7 +380,7 @@ async function downloadBuild(buildId, outputPath) {
     method: "GET",
     headers: {
       "X-API-Key": API_KEY,
-      "X-CLI-Version": "mcp-1.0.0",
+      "X-CLI-Version": "mcp-1.1.0",
     },
     signal: AbortSignal.timeout(300000), // 5-minute timeout for large downloads
     redirect: "error", // CWE-522: never forward X-API-Key on cross-origin 3xx
@@ -401,8 +401,18 @@ async function downloadBuild(buildId, outputPath) {
   try {
     await pipeline(
       nodeReadable,
+      // Enforce MAX_APK_SIZE DURING the stream. The validateApk size gate only
+      // runs after the whole file is on disk, so without this a malicious /
+      // compromised backend (or an oversized build record) could stream until
+      // the operator's disk fills. Aborting here throws into the catch below,
+      // which destroys the stream and unlinks the partial file.
       async function* (source) {
+        let written = 0;
         for await (const chunk of source) {
+          written += chunk.length;
+          if (written > MAX_APK_SIZE) {
+            throw new Error(`Download exceeds the ${MAX_APK_SIZE / (1024 * 1024)} MB limit`);
+          }
           hash.update(chunk);
           yield chunk;
         }
@@ -438,7 +448,7 @@ async function downloadBuild(buildId, outputPath) {
 // MCP Server Setup
 // ================================================================
 const server = new Server(
-  { name: "testnexus", version: "1.0.0" },
+  { name: "testnexus", version: "1.1.0" },
   { capabilities: { tools: {} } }
 );
 
@@ -504,20 +514,58 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   ],
 }));
 
+// CWE-20: the MCP SDK does NOT enforce `inputSchema`, and a prompt-injected LLM
+// can emit wrong-typed arguments — e.g. `limit: {}` becomes NaN in a backend
+// query, or a non-string path throws a raw TypeError out of resolve(). Validate
+// the fields each tool actually uses before dispatch. Unknown extra fields are
+// harmless (handlers read named fields only), so we don't hard-fail on them.
+const TOOL_ARG_TYPES = {
+  push_build: { apk_path: "string", version_name: "string", notes: "string" },
+  list_builds: { limit: "number", branch: "string" },
+  download_build: { build_id: "string", output_path: "string" },
+};
+function validateToolArgs(name, args) {
+  const spec = TOOL_ARG_TYPES[name];
+  if (!spec) return;
+  for (const [key, type] of Object.entries(spec)) {
+    const v = args[key];
+    if (v === undefined || v === null) continue;
+    if (type === "string" && typeof v !== "string") {
+      throw new Error(`Invalid argument "${key}": expected a string.`);
+    }
+    if (type === "number" && (typeof v !== "number" || !Number.isFinite(v))) {
+      throw new Error(`Invalid argument "${key}": expected a finite number.`);
+    }
+  }
+  if (name === "download_build" && !String(args.build_id ?? "").trim()) {
+    throw new Error(`Missing required argument "build_id".`);
+  }
+}
+
 // Handle tool calls
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
+  const { name, arguments: rawArgs } = request.params;
+  const args = rawArgs || {};
+
+  try {
+    validateToolArgs(name, args);
+  } catch (err) {
+    return {
+      content: [{ type: "text", text: JSON.stringify({ status: "error", message: sanitizeErrorMessage(err.message) }) }],
+      isError: true,
+    };
+  }
 
   if (name === "push_build") {
-    return await handlePushBuild(args || {});
+    return await handlePushBuild(args);
   }
 
   if (name === "list_builds") {
-    return await handleListBuilds(args || {});
+    return await handleListBuilds(args);
   }
 
   if (name === "download_build") {
-    return await handleDownloadBuild(args || {});
+    return await handleDownloadBuild(args);
   }
 
   return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
@@ -696,7 +744,10 @@ async function handleDownloadBuild(args) {
           status: "success",
           message: "Build downloaded and verified.",
           build_id: args.build_id,
-          output_path: outputPath,
+          // Sanitize even on the SUCCESS path: outputPath is absolute and leaks
+          // the operator's PROJECT_ROOT (username + dir layout) into the transcript.
+          // sanitizeErrorMessage rewrites the root to "." → a useful relative path.
+          output_path: sanitizeErrorMessage(outputPath),
           sha256: result.sha256.substring(0, 16) + "...",
           size_mb: (result.sizeBytes / (1024 * 1024)).toFixed(1),
           apk_valid: validation.valid,
