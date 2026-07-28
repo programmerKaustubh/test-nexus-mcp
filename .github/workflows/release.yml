@@ -1,0 +1,118 @@
+# Publish @twocan/testnexus-mcp to npm, with provenance.
+#
+# Runs only in the PUBLIC repo. Triggered by a v* tag. One tag push produces:
+# the git tag, a verified npm release (with provenance), and a GitHub Release.
+#
+# Release steps: bump the version in package.json AND .claude-plugin/plugin.json,
+# commit, then `git tag vX.Y.Z && git push <public> vX.Y.Z`.
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      # contents:write lets the job create the GitHub Release from the tag.
+      contents: write
+      # id-token:write is required for npm provenance (OIDC attestation).
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+
+      # Install the exact locked tree; fails if package.json and the lockfile disagree.
+      - run: npm ci
+
+      # Gate: all version fields must agree with each other and with the tag, so a
+      # release can never ship mismatched package/plugin/tag versions.
+      - name: Verify versions are in sync
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          PKG=$(node -p "require('./package.json').version")
+          PLUGIN=$(node -p "require('./.claude-plugin/plugin.json').version")
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "package.json=$PKG plugin.json=$PLUGIN tag=$TAG"
+          if [ "$PKG" != "$PLUGIN" ]; then
+            echo "::error::package.json ($PKG) and .claude-plugin/plugin.json ($PLUGIN) disagree"
+            exit 1
+          fi
+          if [ "$PKG" != "$TAG" ]; then
+            echo "::error::Tag v$TAG does not match package.json version $PKG"
+            exit 1
+          fi
+
+      # Guard: only ever publish a build that targets the production endpoint.
+      # Asserting the prod URL is present (rather than naming any other host)
+      # fails loudly if the wrong tree is ever about to be released.
+      - name: Verify production endpoint
+        run: |
+          if ! grep -q 'const BASE_URL = "https://api.twocan.us"' src/index.js; then
+            echo "::error::Production endpoint (api.twocan.us) not found in src/index.js — refusing to publish."
+            exit 1
+          fi
+
+      # Server must at least boot and expose its stdio transport before we publish.
+      - name: Smoke test (server boots)
+        run: timeout 10s node src/index.js < /dev/null || test $? -eq 124
+
+      # Assert the tarball contains ONLY the expected files, so a stray file
+      # (a note, a key, a fixture) can never be published by accident.
+      - name: Verify tarball contents
+        run: |
+          FILES=$(npm pack --dry-run --json | node -e "
+            const p = JSON.parse(require('fs').readFileSync(0));
+            console.log(p[0].files.map(f => f.path).sort().join('\n'));
+          ")
+          echo "$FILES"
+          EXPECTED=".claude-plugin/plugin.json
+          LICENSE
+          README.md
+          hooks/claude-code-hook.json
+          package.json
+          src/index.js"
+          if [ "$FILES" != "$EXPECTED" ]; then
+            echo "::error::Tarball contents changed — review before publishing. Update this gate only after confirming every file belongs."
+            diff <(echo "$EXPECTED") <(echo "$FILES") || true
+            exit 1
+          fi
+
+      # provenance:true lives in package.json publishConfig, so plain publish attests.
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # Mirror the npm release as a GitHub Release so the tag, npm, and GitHub all
+      # move together from the single tag push.
+      #
+      # Release notes come ONLY from this version's section of CHANGELOG.md,
+      # which is written for end users and kept intentionally non-technical.
+      # We never use --generate-notes (which would pull in commit messages).
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v h="## $VERSION" '
+            index($0, h)==1 {flag=1; next}
+            /^## / && flag {flag=0}
+            flag {print}
+          ' CHANGELOG.md > release-notes.md
+          # Fallback if the version section is missing — a bare title, never commits.
+          if [ ! -s release-notes.md ]; then
+            printf "Test Nexus MCP %s is now available.\n" "$VERSION" > release-notes.md
+          fi
+          echo "----- release notes to be published -----"; cat release-notes.md
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "Test Nexus MCP ${VERSION}" \
+            --notes-file release-notes.md \
+            --verify-tag

@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.*
+*.log
+
+# Local MCP configuration — developers substitute their own API key and
+# paths into this file; the tracked HEAD version uses a placeholder and
+# must not be overwritten by a locally-edited copy. Keep out of commits.
+.mcp.json
+
+# IDE metadata
+.idea/

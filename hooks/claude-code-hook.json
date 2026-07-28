@@ -1,0 +1,16 @@
+{
+  "_comment": "TestNexus Claude Code hook. Copy this into .claude/settings.json in your project root. After every successful './gradlew assembleDebug' (or any Bash command that outputs 'BUILD SUCCESSFUL'), the hook runs 'testnexus push' automatically, which validates and uploads the APK to the TestNexus app on your phone.",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if grep -q 'BUILD SUCCESSFUL' <<< \"$CLAUDE_TOOL_OUTPUT\" 2>/dev/null && command -v testnexus >/dev/null 2>&1; then testnexus push 2>&1 || true; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
