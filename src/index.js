@@ -39,7 +39,7 @@ import { Readable } from "stream";
 // ================================================================
 const API_KEY = process.env.TESTNEXUS_API_KEY ||
   process.env.CLAUDE_PLUGIN_OPTION_API_KEY || "";
-const MAX_APK_SIZE = 100 * 1024 * 1024; // 100 MB
+const MAX_APK_SIZE = 200 * 1024 * 1024; // 200 MB (matches the server-side upload limit)
 
 // Default: the working directory the server was launched from. When the MCP
 // server is started by a desktop client outside the user's project directory
@@ -249,7 +249,7 @@ function getGitMetadata(cwd) {
 }
 
 // ================================================================
-// SHA-256 (streaming — safe for 150 MB APKs)
+// SHA-256 (streaming — memory-safe for large APKs)
 // ================================================================
 function computeSha256(filePath) {
   return new Promise((resolve, reject) => {
@@ -276,7 +276,7 @@ async function uploadToWebhook(apkPath, metadata) {
     headers: {
       "X-API-Key": API_KEY,
       "Content-Type": "application/json",
-      "X-CLI-Version": "mcp-1.1.0",
+      "X-CLI-Version": "mcp-1.1.1",
     },
     body: JSON.stringify({
       sha256: metadata.sha256,
@@ -323,7 +323,7 @@ async function uploadToWebhook(apkPath, metadata) {
     headers: {
       "X-API-Key": API_KEY,
       "Content-Type": "application/json",
-      "X-CLI-Version": "mcp-1.1.0",
+      "X-CLI-Version": "mcp-1.1.1",
     },
     body: JSON.stringify({ buildId }),
     signal: AbortSignal.timeout(120000),
@@ -353,7 +353,7 @@ async function fetchBuilds({ limit = 10, branch = "" } = {}) {
     method: "GET",
     headers: {
       "X-API-Key": API_KEY,
-      "X-CLI-Version": "mcp-1.1.0",
+      "X-CLI-Version": "mcp-1.1.1",
     },
     signal: AbortSignal.timeout(30000),
     redirect: "error", // Fail rather than follow a redirect while the API key header is set.
@@ -380,7 +380,7 @@ async function downloadBuild(buildId, outputPath) {
     method: "GET",
     headers: {
       "X-API-Key": API_KEY,
-      "X-CLI-Version": "mcp-1.1.0",
+      "X-CLI-Version": "mcp-1.1.1",
     },
     signal: AbortSignal.timeout(300000), // 5-minute timeout for large downloads
     redirect: "error", // Fail rather than follow a redirect while the API key header is set.
@@ -447,7 +447,7 @@ async function downloadBuild(buildId, outputPath) {
 // MCP Server Setup
 // ================================================================
 const server = new Server(
-  { name: "testnexus", version: "1.1.0" },
+  { name: "testnexus", version: "1.1.1" },
   { capabilities: { tools: {} } }
 );
 

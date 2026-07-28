@@ -6,6 +6,10 @@ Release highlights for Test Nexus MCP. Install or update anytime with one comman
 npx -y @twocan/testnexus-mcp
 ```
 
+## 1.1.1
+
+- **Larger builds.** Push APKs up to 200 MB.
+
 ## 1.1.0
 
 Test Nexus MCP is now available on **npm** — a single command to install, and it stays up to date automatically.

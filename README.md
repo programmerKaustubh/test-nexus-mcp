@@ -100,7 +100,7 @@ You (in Claude Code)          Cloud                     Phone
 
 1. File exists and ends in `.apk`
 2. File is not empty
-3. File is **under 100 MB**
+3. File is **under 200 MB**
 4. ZIP magic bytes (`PK\x03\x04`) are correct
 5. Contains `AndroidManifest.xml` and `classes*.dex`
 6. Contains `META-INF/` (signed)
@@ -308,7 +308,7 @@ Full details and your rights: [Privacy Policy](https://twocan.us/privacy-policy)
 | **"No APK found"** | Run `./gradlew assembleDebug` first, or name the path: *"push /path/to/my.apk"*. |
 | **"TESTNEXUS_API_KEY not configured"** | The env var isn't set. `export TESTNEXUS_API_KEY=ri_…`, then **restart** Claude Code. Check with `echo $TESTNEXUS_API_KEY`. |
 | **"Upload failed (HTTP 401)"** | Key is wrong/expired. Verify it starts with `ri_`; rotate it in the app (Project → Rotate API Key). |
-| **"Exceeds 100 MB limit"** | The APK is over the cap. Push a smaller variant (e.g. a minified release build). |
+| **"Exceeds 200 MB limit"** | The APK is over the cap. Push a smaller variant (e.g. a minified release build). |
 | **"Not a valid ZIP/APK (bad magic bytes)"** | The file isn't a real APK — rebuild, or check it isn't corrupted (`file app/…/app-debug.apk`). |
 | **Build **held for signer review** / not downloadable** | Expected for a **new signing key** — approve the signer once in the app (owner), then it delivers. |
 | **MCP not showing up** | Verify Node 20+ (`node --version`), run `claude mcp list`, and restart Claude Code. |
