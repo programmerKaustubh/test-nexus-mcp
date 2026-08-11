@@ -6,6 +6,10 @@ Release highlights for Test Nexus MCP. Install or update anytime with one comman
 npx -y @twocan/testnexus-mcp
 ```
 
+## 1.1.2
+
+- **Honest push results.** When a build is held for signer review — its signing key isn't on the project's trusted list yet — `push_build` now clearly reports it as **held and not yet delivered**, instead of reporting success. You'll know to approve the signer in the TestNexus app before your team can install it.
+
 ## 1.1.1
 
 - **Larger builds.** Push APKs up to 200 MB.

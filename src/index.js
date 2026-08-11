@@ -12,8 +12,8 @@
  *   download_build — Download a specific build to the local machine
  *
  * Security:
- *   - Zero telemetry (Decision 11)
- *   - API key stored in keychain or env var (Decision 7)
+ *   - No usage analytics or tracking (only a version header on API calls)
+ *   - API key stored in keychain or env var
  *   - HTTPS-only outbound calls
  *   - Structured, predictable JSON output
  *   - No arbitrary file reads/writes — only Gradle APK output dirs and validated download paths
@@ -276,7 +276,7 @@ async function uploadToWebhook(apkPath, metadata) {
     headers: {
       "X-API-Key": API_KEY,
       "Content-Type": "application/json",
-      "X-CLI-Version": "mcp-1.1.1",
+      "X-CLI-Version": "mcp-1.1.2",
     },
     body: JSON.stringify({
       sha256: metadata.sha256,
@@ -323,7 +323,7 @@ async function uploadToWebhook(apkPath, metadata) {
     headers: {
       "X-API-Key": API_KEY,
       "Content-Type": "application/json",
-      "X-CLI-Version": "mcp-1.1.1",
+      "X-CLI-Version": "mcp-1.1.2",
     },
     body: JSON.stringify({ buildId }),
     signal: AbortSignal.timeout(120000),
@@ -353,7 +353,7 @@ async function fetchBuilds({ limit = 10, branch = "" } = {}) {
     method: "GET",
     headers: {
       "X-API-Key": API_KEY,
-      "X-CLI-Version": "mcp-1.1.1",
+      "X-CLI-Version": "mcp-1.1.2",
     },
     signal: AbortSignal.timeout(30000),
     redirect: "error", // Fail rather than follow a redirect while the API key header is set.
@@ -380,7 +380,7 @@ async function downloadBuild(buildId, outputPath) {
     method: "GET",
     headers: {
       "X-API-Key": API_KEY,
-      "X-CLI-Version": "mcp-1.1.1",
+      "X-CLI-Version": "mcp-1.1.2",
     },
     signal: AbortSignal.timeout(300000), // 5-minute timeout for large downloads
     redirect: "error", // Fail rather than follow a redirect while the API key header is set.
@@ -447,7 +447,7 @@ async function downloadBuild(buildId, outputPath) {
 // MCP Server Setup
 // ================================================================
 const server = new Server(
-  { name: "testnexus", version: "1.1.1" },
+  { name: "testnexus", version: "1.1.2" },
   { capabilities: { tools: {} } }
 );
 
@@ -623,12 +623,48 @@ async function handlePushBuild(args) {
       apkSizeBytes: validation.sizeBytes,
     });
 
+    // Finalize returns HTTP 200 for a build that was accepted but NOT delivered: the
+    // response reports `held: true` / `success: false` when the build is awaiting signer
+    // review. Check the body, not just the HTTP status, and report the outcome the caller
+    // actually got.
+    if (result.held === true || result.success === false) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            status: "held",
+            held: true,
+            message:
+              "Build uploaded but HELD for signer review — it has NOT been sent to your " +
+              "team. Its signing key isn't on the project's trusted-signer list, so the " +
+              "server quarantined it. The project owner must approve it in the TestNexus " +
+              "app (Project details → Signer review) before it is delivered.",
+            reason: result.reason || "signer_mismatch",
+            build_id: result.buildId || "",
+            sha256: sha256.substring(0, 16) + "...",
+            size_mb: (validation.sizeBytes / (1024 * 1024)).toFixed(1),
+            branch: git.branch,
+            commit: git.commitSha.substring(0, 7),
+          }),
+        }],
+      };
+    }
+
     return {
       content: [{
         type: "text",
         text: JSON.stringify({
           status: "success",
-          message: "Build pushed to TestNexus. Your team will receive a notification.",
+          // The recipient count decides the wording. A delivered build with zero subscribed
+          // testers reached nobody, and a flat "your team will receive a notification" is the
+          // same false positive as reporting a held build as a success: it tells the pusher the
+          // job is done when no device will ever see it. The count was already in this payload;
+          // only the sentence overclaimed.
+          message: (result.recipients || 0) > 0
+            ? `Build pushed to TestNexus. ${result.recipients} device(s) will be notified.`
+            : "Build pushed to TestNexus, but NO devices are subscribed — nobody will be " +
+              "notified. Add a member to the project, and make sure they have opened the " +
+              "TestNexus app at least once on the device that should receive builds.",
           build_id: result.buildId || "",
           recipients: result.recipients || 0,
           sha256: sha256.substring(0, 16) + "...",
