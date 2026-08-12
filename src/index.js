@@ -203,11 +203,8 @@ function listZipEntries(zipPath) {
     const cdSize = tail.readUInt32LE(eocdOffset + 12);
     const entryCount = tail.readUInt16LE(eocdOffset + 10);
 
-    // Bounds-check the central directory against the actual file size.
-    // cdSize and cdOffset are untrusted 32-bit fields read straight from the
-    // ZIP header — without this guard, a malformed cdSize could request a
-    // ~4 GiB Buffer.alloc on a tiny file, well before validateApk's
-    // file-size cap would apply.
+    // The central directory must lie within the file and be allocatable.
+    // Reject offsets or sizes that fall outside the actual file length.
     if (cdSize <= 0 || cdOffset < 0 || cdOffset + cdSize > fileSize) {
       throw new Error("Invalid ZIP central directory bounds");
     }
@@ -276,12 +273,13 @@ async function uploadToWebhook(apkPath, metadata) {
     headers: {
       "X-API-Key": API_KEY,
       "Content-Type": "application/json",
-      "X-CLI-Version": "mcp-1.1.2",
+      "X-CLI-Version": "mcp-1.1.3",
     },
     body: JSON.stringify({
       sha256: metadata.sha256,
       apkSizeBytes: metadata.apkSizeBytes,
       versionName: metadata.versionName || "",
+      notes: metadata.notes || "",
       branch: metadata.branch,
       commitSha: metadata.commitSha,
       commitMessage: metadata.commitMessage,
@@ -323,7 +321,7 @@ async function uploadToWebhook(apkPath, metadata) {
     headers: {
       "X-API-Key": API_KEY,
       "Content-Type": "application/json",
-      "X-CLI-Version": "mcp-1.1.2",
+      "X-CLI-Version": "mcp-1.1.3",
     },
     body: JSON.stringify({ buildId }),
     signal: AbortSignal.timeout(120000),
@@ -353,7 +351,7 @@ async function fetchBuilds({ limit = 10, branch = "" } = {}) {
     method: "GET",
     headers: {
       "X-API-Key": API_KEY,
-      "X-CLI-Version": "mcp-1.1.2",
+      "X-CLI-Version": "mcp-1.1.3",
     },
     signal: AbortSignal.timeout(30000),
     redirect: "error", // Fail rather than follow a redirect while the API key header is set.
@@ -380,7 +378,7 @@ async function downloadBuild(buildId, outputPath) {
     method: "GET",
     headers: {
       "X-API-Key": API_KEY,
-      "X-CLI-Version": "mcp-1.1.2",
+      "X-CLI-Version": "mcp-1.1.3",
     },
     signal: AbortSignal.timeout(300000), // 5-minute timeout for large downloads
     redirect: "error", // Fail rather than follow a redirect while the API key header is set.
@@ -447,7 +445,7 @@ async function downloadBuild(buildId, outputPath) {
 // MCP Server Setup
 // ================================================================
 const server = new Server(
-  { name: "testnexus", version: "1.1.2" },
+  { name: "testnexus", version: "1.1.3" },
   { capabilities: { tools: {} } }
 );
 
@@ -456,7 +454,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
   tools: [
     {
       name: "push_build",
-      description: "Validate and upload the latest Android APK build to TestNexus. The APK is delivered to all team members' phones via push notification.",
+      description: "Validate and upload the latest Android APK build to TestNexus. Subscribed team devices are notified by push. A build signed with a key that is not on the project's trusted-signer list is HELD for owner approval instead of being delivered, and a project with no subscribed devices notifies nobody — the result reports the actual outcome and the recipient count, so report what it says rather than assuming delivery.",
       inputSchema: {
         type: "object",
         properties: {
@@ -466,7 +464,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           version_name: {
             type: "string",
-            description: "Version name (e.g., '1.4.2'). If omitted, extracted from APK.",
+            description: "Version name (e.g., '1.4.2'). If omitted, the build is sent without a version label and recipients identify it by build ID instead — pass this to label the build.",
           },
           notes: {
             type: "string",
@@ -504,7 +502,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({
           },
           output_path: {
             type: "string",
-            description: "Where to save the APK file. Defaults to ./<build_id>.apk in the current directory.",
+            description: "Where to save the APK, relative to the project root. Defaults to ./<build_id>.apk. Paths resolving outside the project root are rejected, and a leading '~' is NOT expanded to the home directory — use a project-relative path such as builds/app.apk.",
           },
         },
         required: ["build_id"],
@@ -620,13 +618,13 @@ async function handlePushBuild(args) {
       commitSha: git.commitSha,
       commitMessage: git.commitMessage,
       versionName: args.version_name || "",
+      // Sent to the server, which truncates to 1000 characters.
+      notes: args.notes || "",
       apkSizeBytes: validation.sizeBytes,
     });
 
-    // Finalize returns HTTP 200 for a build that was accepted but NOT delivered: the
-    // response reports `held: true` / `success: false` when the build is awaiting signer
-    // review. Check the body, not just the HTTP status, and report the outcome the caller
-    // actually got.
+    // Finalize returns HTTP 200 with `held: true` / `success: false` when a build is
+    // awaiting signer review. Read the body, not the status code, and report that outcome.
     if (result.held === true || result.success === false) {
       return {
         content: [{
@@ -655,11 +653,8 @@ async function handlePushBuild(args) {
         type: "text",
         text: JSON.stringify({
           status: "success",
-          // The recipient count decides the wording. A delivered build with zero subscribed
-          // testers reached nobody, and a flat "your team will receive a notification" is the
-          // same false positive as reporting a held build as a success: it tells the pusher the
-          // job is done when no device will ever see it. The count was already in this payload;
-          // only the sentence overclaimed.
+          // The recipient count decides the wording: a build with zero subscribed devices
+          // reached nobody, and the message says so rather than implying delivery.
           message: (result.recipients || 0) > 0
             ? `Build pushed to TestNexus. ${result.recipients} device(s) will be notified.`
             : "Build pushed to TestNexus, but NO devices are subscribed — nobody will be " +

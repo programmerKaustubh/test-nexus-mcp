@@ -6,6 +6,11 @@ Release highlights for Test Nexus MCP. Install or update anytime with one comman
 npx -y @twocan/testnexus-mcp
 ```
 
+## 1.1.3
+
+- **Build notes now attached.** If you pass `notes` (a changelog or build description) to `push_build`, it's now actually sent with the build and shown to your team — previously it was accepted but dropped.
+- **Clearer tool descriptions.** `push_build` now states plainly that a build signed with an untrusted key is held for owner approval, and that a build reports its real outcome and recipient count rather than assuming delivery.
+
 ## 1.1.2
 
 - **Honest push results.** When a build is held for signer review — its signing key isn't on the project's trusted list yet — `push_build` now clearly reports it as **held and not yet delivered**, instead of reporting success. You'll know to approve the signer in the TestNexus app before your team can install it.
