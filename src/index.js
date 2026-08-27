@@ -39,7 +39,11 @@ import { Readable } from "stream";
 // ================================================================
 const API_KEY = process.env.TESTNEXUS_API_KEY ||
   process.env.CLAUDE_PLUGIN_OPTION_API_KEY || "";
-const MAX_APK_SIZE = 200 * 1024 * 1024; // 200 MB (matches the server-side upload limit)
+const MAX_APK_SIZE = 300 * 1024 * 1024; // 300 MB (matches the server-side upload limit)
+// Independent upper bound on a ZIP central directory. A real APK's central
+// directory is kilobytes-to-low-megabytes; this caps the single Buffer.alloc in
+// listZipEntries so it never scales with MAX_APK_SIZE, now or on future bumps.
+const MAX_CENTRAL_DIRECTORY_SIZE = 64 * 1024 * 1024; // 64 MB
 
 // Default: the working directory the server was launched from. When the MCP
 // server is started by a desktop client outside the user's project directory
@@ -208,6 +212,12 @@ function listZipEntries(zipPath) {
     if (cdSize <= 0 || cdOffset < 0 || cdOffset + cdSize > fileSize) {
       throw new Error("Invalid ZIP central directory bounds");
     }
+    // Bound the allocation independently of the file size — a legitimate APK's
+    // central directory is never this large, so anything over the cap is malformed
+    // or hostile. Prevents a crafted APK from forcing a file-size Buffer.alloc.
+    if (cdSize > MAX_CENTRAL_DIRECTORY_SIZE) {
+      throw new Error("ZIP central directory exceeds the maximum allowed size");
+    }
 
     // Read the central directory
     const cd = Buffer.alloc(cdSize);
@@ -273,7 +283,7 @@ async function uploadToWebhook(apkPath, metadata) {
     headers: {
       "X-API-Key": API_KEY,
       "Content-Type": "application/json",
-      "X-CLI-Version": "mcp-1.1.3",
+      "X-CLI-Version": "mcp-1.1.4",
     },
     body: JSON.stringify({
       sha256: metadata.sha256,
@@ -307,7 +317,7 @@ async function uploadToWebhook(apkPath, metadata) {
       "Content-Type": "application/vnd.android.package-archive",
     },
     body: apkBlob,
-    signal: AbortSignal.timeout(300000), // 5-minute timeout for large uploads
+    signal: AbortSignal.timeout(600000), // 10-minute timeout for large uploads
   });
 
   if (!step2Response.ok) {
@@ -321,7 +331,7 @@ async function uploadToWebhook(apkPath, metadata) {
     headers: {
       "X-API-Key": API_KEY,
       "Content-Type": "application/json",
-      "X-CLI-Version": "mcp-1.1.3",
+      "X-CLI-Version": "mcp-1.1.4",
     },
     body: JSON.stringify({ buildId }),
     signal: AbortSignal.timeout(120000),
@@ -351,7 +361,7 @@ async function fetchBuilds({ limit = 10, branch = "" } = {}) {
     method: "GET",
     headers: {
       "X-API-Key": API_KEY,
-      "X-CLI-Version": "mcp-1.1.3",
+      "X-CLI-Version": "mcp-1.1.4",
     },
     signal: AbortSignal.timeout(30000),
     redirect: "error", // Fail rather than follow a redirect while the API key header is set.
@@ -378,9 +388,9 @@ async function downloadBuild(buildId, outputPath) {
     method: "GET",
     headers: {
       "X-API-Key": API_KEY,
-      "X-CLI-Version": "mcp-1.1.3",
+      "X-CLI-Version": "mcp-1.1.4",
     },
-    signal: AbortSignal.timeout(300000), // 5-minute timeout for large downloads
+    signal: AbortSignal.timeout(600000), // 10-minute timeout for large downloads
     redirect: "error", // Fail rather than follow a redirect while the API key header is set.
   });
 
@@ -445,7 +455,7 @@ async function downloadBuild(buildId, outputPath) {
 // MCP Server Setup
 // ================================================================
 const server = new Server(
-  { name: "testnexus", version: "1.1.3" },
+  { name: "testnexus", version: "1.1.4" },
   { capabilities: { tools: {} } }
 );
 

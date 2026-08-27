@@ -6,6 +6,10 @@ Release highlights for Test Nexus MCP. Install or update anytime with one comman
 npx -y @twocan/testnexus-mcp
 ```
 
+## 1.1.4
+
+- **Bigger builds.** Push and download APKs up to 300 MB (previously 200 MB), matching the server-side limit. Upload and download time budgets were increased so large builds transfer reliably on slower connections.
+
 ## 1.1.3
 
 - **Build notes now attached.** If you pass `notes` (a changelog or build description) to `push_build`, it's now actually sent with the build and shown to your team — previously it was accepted but dropped.
