@@ -6,6 +6,10 @@ Release highlights for Test Nexus MCP. Install or update anytime with one comman
 npx -y @twocan/testnexus-mcp
 ```
 
+## 1.1.5
+
+- **Uploads keep working after the server update.** `push_build` now sends the upload size-range header that the TestNexus server requires for APK uploads. Update to this version to keep pushing builds; older versions will fail to upload with a 403 error once the server update is live.
+
 ## 1.1.4
 
 - **Bigger builds.** Push and download APKs up to 300 MB (previously 200 MB), matching the server-side limit. Upload and download time budgets were increased so large builds transfer reliably on slower connections.

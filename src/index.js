@@ -283,7 +283,7 @@ async function uploadToWebhook(apkPath, metadata) {
     headers: {
       "X-API-Key": API_KEY,
       "Content-Type": "application/json",
-      "X-CLI-Version": "mcp-1.1.4",
+      "X-CLI-Version": "mcp-1.1.5",
     },
     body: JSON.stringify({
       sha256: metadata.sha256,
@@ -315,6 +315,11 @@ async function uploadToWebhook(apkPath, metadata) {
     method: "PUT",
     headers: {
       "Content-Type": "application/vnd.android.package-archive",
+      // Required: the upload URL is signed with an `x-goog-content-length-range`
+      // header that the storage backend enforces, so the PUT must send it
+      // byte-for-byte. Keep "1," + MAX_APK_SIZE equal to the server's upload size
+      // limit (1..314572800 / 300 MB) — the two are configured independently.
+      "x-goog-content-length-range": "1," + MAX_APK_SIZE,
     },
     body: apkBlob,
     signal: AbortSignal.timeout(600000), // 10-minute timeout for large uploads
@@ -322,7 +327,14 @@ async function uploadToWebhook(apkPath, metadata) {
 
   if (!step2Response.ok) {
     const body = await step2Response.text().catch(() => "");
-    throw new Error(`Storage upload failed (HTTP ${step2Response.status}): ${body}`);
+    // A 403 here is most often an OUT-OF-DATE connector: the upload URL requires
+    // the `x-goog-content-length-range` header (see step 2 above), and an older
+    // connector that doesn't send it is rejected. Surface an actionable hint
+    // instead of a bare 403.
+    const hint = step2Response.status === 403 ?
+      " — your connector may be out of date; update with `npm i -g @twocan/testnexus-mcp@latest` and retry." :
+      "";
+    throw new Error(`Storage upload failed (HTTP ${step2Response.status}): ${body}${hint}`);
   }
 
   // Step 3: Finalize — server verifies SHA-256, marks active, sends FCM
@@ -331,7 +343,7 @@ async function uploadToWebhook(apkPath, metadata) {
     headers: {
       "X-API-Key": API_KEY,
       "Content-Type": "application/json",
-      "X-CLI-Version": "mcp-1.1.4",
+      "X-CLI-Version": "mcp-1.1.5",
     },
     body: JSON.stringify({ buildId }),
     signal: AbortSignal.timeout(120000),
@@ -361,7 +373,7 @@ async function fetchBuilds({ limit = 10, branch = "" } = {}) {
     method: "GET",
     headers: {
       "X-API-Key": API_KEY,
-      "X-CLI-Version": "mcp-1.1.4",
+      "X-CLI-Version": "mcp-1.1.5",
     },
     signal: AbortSignal.timeout(30000),
     redirect: "error", // Fail rather than follow a redirect while the API key header is set.
@@ -388,7 +400,7 @@ async function downloadBuild(buildId, outputPath) {
     method: "GET",
     headers: {
       "X-API-Key": API_KEY,
-      "X-CLI-Version": "mcp-1.1.4",
+      "X-CLI-Version": "mcp-1.1.5",
     },
     signal: AbortSignal.timeout(600000), // 10-minute timeout for large downloads
     redirect: "error", // Fail rather than follow a redirect while the API key header is set.
@@ -455,7 +467,7 @@ async function downloadBuild(buildId, outputPath) {
 // MCP Server Setup
 // ================================================================
 const server = new Server(
-  { name: "testnexus", version: "1.1.4" },
+  { name: "testnexus", version: "1.1.5" },
   { capabilities: { tools: {} } }
 );
 
