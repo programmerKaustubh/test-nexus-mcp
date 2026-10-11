@@ -16,15 +16,16 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    # Human approval before the NPM_TOKEN is used. The required reviewer must be
-    # configured in the PUBLIC repo: Settings -> Environments -> npm-publish (owner
-    # action). Until that reviewer is set, this line creates the environment but does
-    # NOT gate — configure it before relying on it.
+    # Human approval before the tokenless OIDC publish runs. The required reviewer
+    # must be configured in the PUBLIC repo: Settings -> Environments -> npm-publish
+    # (owner action). Until that reviewer is set, this line creates the environment
+    # but does NOT gate — configure it before relying on it.
     environment: npm-publish
     permissions:
       # contents:write lets the job create the GitHub Release from the tag.
       contents: write
-      # id-token:write is required for npm provenance (OIDC attestation).
+      # id-token:write is REQUIRED for OIDC trusted publishing (tokenless) and for
+      # npm provenance attestation.
       id-token: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -33,6 +34,11 @@ jobs:
         with:
           node-version: 20
           registry-url: "https://registry.npmjs.org"
+
+      # OIDC trusted publishing (tokenless) requires npm >= 11.5.1; the npm
+      # bundled with Node 20 is 10.x. Upgrade within npm 11 before publishing.
+      - name: Upgrade npm for OIDC trusted publishing
+        run: npm install -g npm@^11.5.1
 
       # Install the exact locked tree; fails if package.json and the lockfile disagree.
       - run: npm ci
@@ -90,14 +96,15 @@ jobs:
             exit 1
           fi
 
-      # provenance:true lives in package.json publishConfig, so plain publish attests.
+      # Tokenless publish via OIDC trusted publishing: npm exchanges the job's
+      # id-token (permissions.id-token: write) for a short-lived credential, with
+      # NO long-lived NPM_TOKEN secret. The repo+workflow must be registered as a
+      # trusted publisher on the npm package. provenance is automatic under OIDC.
       # Tag-gated: a workflow_dispatch (branch, no tag) SKIPS the version-sync gate
       # above, so it must never reach publish. Only a v* tag ref publishes.
       - name: Publish to npm
         if: startsWith(github.ref, 'refs/tags/v')
         run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # Mirror the npm release as a GitHub Release so the tag, npm, and GitHub all
       # move together from the single tag push.
