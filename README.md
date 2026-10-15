@@ -1,6 +1,5 @@
 <p align="center">
-  <a href="https://twocan.us"><img src="https://twocan.us/twocan-assets/hub-tablet.png" alt="Test Nexus App Hub on a tablet" height="300"></a>
-  <a href="https://twocan.us"><img src="https://twocan.us/twocan-assets/hub-phone.png" alt="Test Nexus App Hub on a phone" height="300"></a>
+  <a href="https://twocan.us"><img src="https://raw.githubusercontent.com/programmerKaustubh/test-nexus-mcp/main/assets/mcp-hero.png" alt="Test Nexus MCP — your AI builds the APK, your team installs it" width="900"></a>
 </p>
 
 <h1 align="center">Test Nexus MCP</h1>
@@ -24,7 +23,7 @@
 "Build the app in debug mode and push it to my phone"
 ```
 
-Claude builds your APK, validates it, verifies its signature, and delivers it to **every team member's phone** via push notification — they install with one tap. It's the fastest loop between *"fix the bug"* and *"it's on the testers' devices."*
+Claude builds your APK, validates it, verifies its signature, and delivers it to **every team member's phone** via push notification — they download and install it. It's the fastest loop between *"fix the bug"* and *"it's on the testers' devices."*
 
 ---
 
@@ -47,7 +46,7 @@ Test Nexus MCP is a [Model Context Protocol](https://modelcontextprotocol.io/) s
 
 | Tool | What it does |
 |------|-------------|
-| `push_build` | Validates your APK (6 checks), computes SHA-256, extracts git metadata, and uploads it to your Test Nexus project. Every member gets a push notification and installs with one tap. |
+| `push_build` | Validates your APK (6 checks), computes SHA-256, extracts git metadata, and uploads it to your Test Nexus project. Every member gets a push notification, then downloads and installs it. |
 | `list_builds` | Lists recent builds for your project — id, version, branch + commit, upload time, size. Read-only. |
 | `download_build` | Pulls a specific build back to your machine by id, and **re-verifies SHA-256** after download. |
 
@@ -109,6 +108,10 @@ If any check fails, Claude tells you exactly what's wrong. **Nothing gets upload
 
 ---
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/programmerKaustubh/test-nexus-mcp/main/assets/mcp-how-it-works.png" alt="How it works: ask your assistant, push_build uploads it over HTTPS with a SHA-256 hash, your team installs it" width="900">
+</p>
+
 ## Quick start
 
 ```bash
@@ -166,6 +169,10 @@ That's it — from a single link to a working *"build and push it to my phone"* 
 Store it like any other secret (see [Handling secrets](#handling-secrets)).
 
 ---
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/programmerKaustubh/test-nexus-mcp/main/assets/mcp-connect.png" alt="Connect your MCP client in 3 steps: create a project, set TESTNEXUS_API_KEY to your ri_ key, add it to your MCP client" width="900">
+</p>
 
 ## Installation
 
