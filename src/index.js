@@ -283,7 +283,7 @@ async function uploadToWebhook(apkPath, metadata) {
     headers: {
       "X-API-Key": API_KEY,
       "Content-Type": "application/json",
-      "X-CLI-Version": "mcp-1.1.5",
+      "X-CLI-Version": "mcp-1.1.6",
     },
     body: JSON.stringify({
       sha256: metadata.sha256,
@@ -343,7 +343,7 @@ async function uploadToWebhook(apkPath, metadata) {
     headers: {
       "X-API-Key": API_KEY,
       "Content-Type": "application/json",
-      "X-CLI-Version": "mcp-1.1.5",
+      "X-CLI-Version": "mcp-1.1.6",
     },
     body: JSON.stringify({ buildId }),
     signal: AbortSignal.timeout(120000),
@@ -373,7 +373,7 @@ async function fetchBuilds({ limit = 10, branch = "" } = {}) {
     method: "GET",
     headers: {
       "X-API-Key": API_KEY,
-      "X-CLI-Version": "mcp-1.1.5",
+      "X-CLI-Version": "mcp-1.1.6",
     },
     signal: AbortSignal.timeout(30000),
     redirect: "error", // Fail rather than follow a redirect while the API key header is set.
@@ -400,7 +400,7 @@ async function downloadBuild(buildId, outputPath) {
     method: "GET",
     headers: {
       "X-API-Key": API_KEY,
-      "X-CLI-Version": "mcp-1.1.5",
+      "X-CLI-Version": "mcp-1.1.6",
     },
     signal: AbortSignal.timeout(600000), // 10-minute timeout for large downloads
     redirect: "error", // Fail rather than follow a redirect while the API key header is set.
@@ -467,7 +467,7 @@ async function downloadBuild(buildId, outputPath) {
 // MCP Server Setup
 // ================================================================
 const server = new Server(
-  { name: "testnexus", version: "1.1.5" },
+  { name: "testnexus", version: "1.1.6" },
   { capabilities: { tools: {} } }
 );
 

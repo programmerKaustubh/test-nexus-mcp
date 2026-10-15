@@ -1,6 +1,6 @@
 {
   "name": "@twocan/testnexus-mcp",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "TestNexus MCP server for Claude Code — push, list, and download Android APK builds",
   "main": "src/index.js",
   "bin": {
@@ -38,6 +38,6 @@
     "provenance": true
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.30.0"
+    "@modelcontextprotocol/sdk": "1.32.1"
   }
 }
